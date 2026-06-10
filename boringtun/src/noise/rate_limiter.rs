@@ -5,7 +5,7 @@ use crate::noise::{HandshakeInit, HandshakeResponse, Packet, Tunn, TunnResult, W
 #[cfg(feature = "mock-instant")]
 use mock_instant::Instant;
 use std::net::IpAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 #[cfg(not(feature = "mock-instant"))]
 use crate::sleepyinstant::Instant;
@@ -41,12 +41,12 @@ pub struct RateLimiter {
     secret_key: [u8; 16],
     start_time: Instant,
     /// A single 64 bit counter (should suffice for many years)
-    nonce_ctr: AtomicU64,
+    nonce_ctr: AtomicU32,
     mac1_key: [u8; 32],
     cookie_key: Key,
     limit: u64,
     /// The counter since last reset
-    count: AtomicU64,
+    count: AtomicU32,
     /// The time last reset was performed on this rate limiter
     last_reset: Mutex<Instant>,
 }
@@ -59,11 +59,11 @@ impl RateLimiter {
             nonce_key: Self::rand_bytes(),
             secret_key,
             start_time: Instant::now(),
-            nonce_ctr: AtomicU64::new(0),
+            nonce_ctr: AtomicU32::new(0),
             mac1_key: b2s_hash(LABEL_MAC1, public_key.as_bytes()),
             cookie_key: b2s_hash(LABEL_COOKIE, public_key.as_bytes()).into(),
             limit,
-            count: AtomicU64::new(0),
+            count: AtomicU32::new(0),
             last_reset: Mutex::new(Instant::now()),
         }
     }
@@ -109,7 +109,7 @@ impl RateLimiter {
     }
 
     fn is_under_load(&self) -> bool {
-        self.count.fetch_add(1, Ordering::SeqCst) >= self.limit
+        u64::from(self.count.fetch_add(1, Ordering::SeqCst)) >= self.limit
     }
 
     pub(crate) fn format_cookie_reply<'a>(
